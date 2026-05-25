@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Gestión de Coches - Coches.eus</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script>
+        if (!localStorage.getItem('jwtToken')) {
+            window.location.href = '/login';
+        }
+    </script>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" th:href="@{/dashboard}">🏎️ COCHES.EUS</a>
+            <div>
+                <a href="/marcas" class="btn btn-outline-light btn-sm me-2">🏷️ Marcas</a>
+                <a href="/coches" class="btn btn-outline-light btn-sm me-2">🚗 Coches</a>
+                <a href="/dashboard" class="btn btn-outline-light btn-sm me-2">🏠 Dashboard</a>
+                <button class="btn btn-danger btn-sm" onclick="logout()">Cerrar Sesión</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="alertaZona"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="text-primary">🚗 Administración de Coches</h1>
+        </div>
+
+        <div class="row">
+            <!-- Formulario -->
+            <div class="col-md-4 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="card-title mb-0" id="form-title">Nuevo Coche</h4>
+                    </div>
+                    <div class="card-body">
+                        <input type="hidden" id="cocheId">
+                        <div class="mb-3">
+                            <label class="form-label">Modelo</label>
+                            <input type="text" class="form-control" id="modelo" placeholder="Ej: Corolla">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Matrícula</label>
+                            <input type="text" class="form-control" id="matricula" placeholder="Ej: 1234ABC">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Precio (€)</label>
+                            <input type="number" class="form-control" id="precio" placeholder="Ej: 24500">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Potencia (CV)</label>
+                            <input type="number" class="form-control" id="potencia" placeholder="Ej: 140">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Marca</label>
+                            <select class="form-select" id="marcaId">
+                                <option value="">-- Selecciona Marca --</option>
+                            </select>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" onclick="guardarCoche()">Guardar</button>
+                            <button class="btn btn-secondary d-none" id="btnCancelar" onclick="limpiarFormulario()">Cancelar Edición</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla -->
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-body table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Modelo</th>
+                                    <th>Matrícula</th>
+                                    <th>Precio</th>
+                                    <th>Potencia</th>
+                                    <th>Marca</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoTabla"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('jwtToken');
+        const headers = { 'Authorization': 'Bearer ' + token };
+
+        // Cargar marcas en el select
+        async function cargarMarcasSelect() {
+            try {
+                const res = await fetch('/api/v1/marcas/', { headers });
+                if (!res.ok || res.status === 204) return;
+                const marcas = await res.json();
+                const sel = document.getElementById('marcaId');
+                marcas.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.text  = m.nombre;
+                    sel.appendChild(opt);
+                });
+            } catch (e) { console.error('Error cargando marcas:', e); }
+        }
+
+        // GET: Listar coches
+        async function cargarCoches() {
+            try {
+                const res = await fetch('/api/v1/coches', { headers });
+                const cuerpo = document.getElementById('cuerpoTabla');
+                if (res.status === 204) {
+                    cuerpo.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay coches registrados</td></tr>';
+                    return;
+                }
+                if (!res.ok) { alerta('Error al cargar coches', 'danger'); return; }
+                const coches = await res.json();
+                cuerpo.innerHTML = '';
+                coches.forEach(c => {
+                    const marcaNombre = c.marca ? c.marca.nombre : '—';
+                    const marcaId     = c.marca ? c.marca.id     : '';
+                    cuerpo.innerHTML += `<tr>
+                        <td>${c.id}</td>
+                        <td>${c.modelo}</td>
+                        <td>${c.matricula}</td>
+                        <td>${c.precio != null ? c.precio + ' €' : '—'}</td>
+                        <td>${c.potencia != null ? c.potencia + ' CV' : '—'}</td>
+                        <td>${marcaNombre}</td>
+                        <td class="text-center">
+                            <button class="btn btn-warning btn-sm me-1"
+                                onclick="cargarEnFormulario(${c.id}, '${(c.modelo||'').replace(/'/g,"\\'")}', '${(c.matricula||'').replace(/'/g,"\\'")}', ${c.precio||0}, ${c.potencia||0}, ${marcaId||0})">
+                                Editar
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="borrarCoche(${c.id})">Borrar</button>
+                        </td>
+                    </tr>`;
+                });
+            } catch (e) { alerta('Error de conexión', 'danger'); }
+        }
+
+        // POST / PUT
+        async function guardarCoche() {
+            const id        = document.getElementById('cocheId').value;
+            const modelo    = document.getElementById('modelo').value.trim();
+            const matricula = document.getElementById('matricula').value.trim();
+            const precio    = parseFloat(document.getElementById('precio').value);
+            const potencia  = parseInt(document.getElementById('potencia').value) || null;
+            const marcaId   = parseInt(document.getElementById('marcaId').value) || null;
+
+            if (!modelo || !matricula || isNaN(precio)) {
+                alerta('Modelo, matrícula y precio son obligatorios', 'warning'); return;
+            }
+
+            const body = { modelo, matricula, precio, potencia };
+            if (marcaId) body.marca = { id: marcaId };
+
+            let url    = '/api/v1/coches';
+            let metodo = 'POST';
+
+            if (id) {
+                url    = '/api/v1/coches/' + id;
+                metodo = 'PUT';
+            }
+
+            try {
+                const res = await fetch(url, {
+                    method: metodo,
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok || res.status === 201) {
+                    alerta(id ? 'Coche modificado ✅' : 'Coche añadido ✅', 'success');
+                    limpiarFormulario();
+                    cargarCoches();
+                } else {
+                    alerta('Error al guardar (código: ' + res.status + ')', 'danger');
+                }
+            } catch (e) { alerta('Error de conexión', 'danger'); }
+        }
+
+        // DELETE
+        async function borrarCoche(id) {
+            if (!confirm('¿Seguro que deseas eliminar el coche con ID ' + id + '?')) return;
+            try {
+                const res = await fetch('/api/v1/coches/' + id, { method: 'DELETE', headers });
+                if (res.ok) {
+                    alerta('Coche eliminado ✅', 'success');
+                    cargarCoches();
+                } else if (res.status === 404) {
+                    alerta('Coche no encontrado', 'warning');
+                } else {
+                    alerta('Error al borrar (código: ' + res.status + ')', 'danger');
+                }
+            } catch (e) { alerta('Error de conexión', 'danger'); }
+        }
+
+        // UI helpers
+        function cargarEnFormulario(id, modelo, matricula, precio, potencia, marcaId) {
+            document.getElementById('cocheId').value   = id;
+            document.getElementById('modelo').value    = modelo;
+            document.getElementById('matricula').value = matricula;
+            document.getElementById('precio').value    = precio;
+            document.getElementById('potencia').value  = potencia || '';
+            document.getElementById('marcaId').value   = marcaId  || '';
+            document.getElementById('form-title').innerText = 'Editar Coche';
+            document.getElementById('btnCancelar').classList.remove('d-none');
+        }
+
+        function limpiarFormulario() {
+            ['cocheId','modelo','matricula','precio','potencia'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('marcaId').value = '';
+            document.getElementById('form-title').innerText = 'Nuevo Coche';
+            document.getElementById('btnCancelar').classList.add('d-none');
+        }
+
+        function alerta(msg, tipo) {
+            const zona = document.getElementById('alertaZona');
+            zona.innerHTML = `<div class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+                ${msg}
+                <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+            </div>`;
+            setTimeout(() => zona.innerHTML = '', 4000);
+        }
+
+        function logout() {
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('username');
+            window.location.href = '/login';
+        }
+
+        cargarMarcasSelect();
+        cargarCoches();
+    </script>
+</body>
+</html>

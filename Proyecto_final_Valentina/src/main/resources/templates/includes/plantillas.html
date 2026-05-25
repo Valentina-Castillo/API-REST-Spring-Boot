@@ -1,0 +1,40 @@
+<div th:fragment="cabecera">
+	<header>
+		<div id="cabecera_izq">
+			<img th:src="@{/imagenes/logo.png}" height="96px" width="96px">
+		</div>
+
+		<div id="cabecera_cen">
+			<h1>Disco Stu</h1>
+			<h2>tu tienda de discos favorita</h2>
+		</div>
+
+		<div id="cabecera_der">
+			<img th:src="@{/imagenes/facebook.png}" height="48px" width="48px">
+			<img th:src="@{/imagenes/instagram.png}" height="48px" width="48px">
+		</div>
+	</header>
+</div>
+
+<div th:fragment="menu">
+	<nav>
+		<ul>
+			<li>
+				<a th:href="@{/MenuDiscos}">Discos</a>
+			</li>
+			<li>
+				<a th:href="@{/MenuGrupos}">Grupos</a>
+			</li>
+			<li>
+				<a th:href="@{/MenuEstilos}">Estilos</a>
+			</li>
+		</ul>
+	</nav>
+</div>
+
+
+<div th:fragment="pie">
+	<footer>
+		el pie de la pagina
+	</footer>
+</div>
